@@ -6,16 +6,10 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract CrowdfundingEther is ReentrancyGuard {
     address public owner;
     uint256 public fundTarget = 0.1 ether;
-    uint256 public startTime = 1705240800;
-    uint256 public endTime = 1705327200;
-    uint256 public totalContributions;
+    uint256 public startTime = 1705608000;
+    uint256 public endTime = 1705611600;
 
-    struct ContributionInfo {
-        address contributor;
-        uint256 amount;
-    }
-
-    ContributionInfo[] public contributions;
+    mapping(address => uint256) public contributions;
 
     event Contribution(address indexed contributor, uint256 amount);
     event RefundClaimed(address indexed contributor, uint256 amount);
@@ -47,9 +41,8 @@ contract CrowdfundingEther is ReentrancyGuard {
     }
 
     receive() external payable {
-    revert("Contract does not accept Ether directly");
-    };
-
+        revert("Contract does not accept Ether directly");
+    }
 
     function getCurrentPhase() external view returns (string memory) {
         if (block.timestamp < startTime) {
@@ -59,17 +52,14 @@ contract CrowdfundingEther is ReentrancyGuard {
         } else {
             return "After Fundraising";
         }
-    };
+    }
 
     function getRemainingTime() external view isValidPhase returns (uint256) {
         return endTime - block.timestamp;
-    };
+    }
 
-    function contribute(
-        uint256 amount,
-    )
+    function contribute()
         external
-        public
         payable
         isValidPhase
         hasNotReachedTarget
@@ -79,58 +69,32 @@ contract CrowdfundingEther is ReentrancyGuard {
             revert("Funding target reached");
         }
 
-        require(msg.value == amount, "Invalid contribution amount");
-        
-
+        require(msg.value > 0, "Invalid contribution amount");
 
         uint256 remainingUntilTarget = fundTarget - getTotalContributions();
         uint256 userContribution = msg.value;
         uint256 differenceToBeRefunded;
 
-
         if (userContribution > remainingUntilTarget) {
             differenceToBeRefunded = userContribution - remainingUntilTarget;
+            contributions[msg.sender] += remainingUntilTarget;
+        } else {
+            contributions[msg.sender] += msg.value;
         }
-
-        bool alreadyExists=false;
-
-        for(uint256 i=0;i<contributions.length;i++){
-            if(contributions[i].contributor==msg.sender){
-                contributions[i].amount+=msg.value;
-                alreadyExists=true;
-            }
-        }
-
-        if(alreadyExists==false){
-            contributions.push(ContributionInfo({
-            contributor: msg.sender,
-            amount:msg.value
-        }))
-        }
-
-        totalContributions += msg.value;
 
         emit Contribution(msg.sender, msg.value);
 
         if (differenceToBeRefunded > 0) {
-            require(payable(msg.sender).send(differenceToBeRefunded), "Failed to send refund");
-            
-            for (uint256 i = 0; i < contributions.length; i++) {
-            if (contributions[i].contributor == msg.sender) {
-            contributions[i].amount -= differenceToBeRefunded;
-            break;
+            require(
+                payable(msg.sender).send(differenceToBeRefunded),
+                "Failed to send refund"
+            );
         }
     }
-        }
-    };
 
     function getTotalContributions() public view returns (uint256) {
-        uint256 totalContributions;
-        for (uint256 i = 0; i < contributions.length; i++) {
-            totalContributions += contributions[i].amount;
-        }
-        return totalContributions;
-    };
+        return address(this).balance;
+    }
 
     function claimRefund() external nonReentrant hasNotReachedTarget {
         require(
@@ -138,18 +102,14 @@ contract CrowdfundingEther is ReentrancyGuard {
             "Either it's not the end of funding, or the fund target has been reached and deploy comes next"
         );
 
-        uint256 refundAmount;
+        uint256 refundAmount = contributions[msg.sender];
 
-        for (uint256 i = 0; i < contributions.length; i++) {
-        if (contributions[i].contributor == msg.sender) {
-        refundAmount = contributions[i].amount;
         require(refundAmount > 0, "No refund available");
 
-        require(payable(msg.sender).send(refundAmount),"Something went wrong");
-        contributions[i].amount = 0;
-        }
+        require(payable(msg.sender).send(refundAmount), "Something went wrong");
+
+        contributions[msg.sender] = 0;
     }
-};
 
     function withdrawFunds() external onlyOwner nonReentrant {
         require(
@@ -158,6 +118,6 @@ contract CrowdfundingEther is ReentrancyGuard {
         );
 
         uint256 balance = getTotalContributions();
-        require(payable(owner).transfer(balance),"Something went wrong");
-    };
+        require(payable(address(owner)).send(balance), "Something went wrong");
+    }
 }
