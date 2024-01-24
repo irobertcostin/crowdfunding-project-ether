@@ -22,7 +22,7 @@ async function main() {
   const contractAddress = await Crowdfunding.getAddress();
   console.log(`Contract deployed at ${contractAddress}`);
 
-  const deployoor = contractAddress.deploymentTransaction();
+  const deployoor = contractAddress.getSigners();
   console.log(`Contract deployer is: ${deployoor.from}`);
 
 }

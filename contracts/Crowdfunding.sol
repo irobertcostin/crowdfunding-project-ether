@@ -2,12 +2,15 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./SafeMath.sol";
 
 contract CrowdfundingEther is ReentrancyGuard {
+    using SafeMath for uint256;
+
     address public owner;
-    uint256 public fundTarget = 0.1 ether;
-    uint256 public startTime = 1705608000;
-    uint256 public endTime = 1705611600;
+    uint256 public fundTarget = 0.05 ether;
+    uint256 public startTime = 1706139381;
+    uint256 public endTime = 1706139981;
 
     mapping(address => uint256) public contributions;
 
@@ -58,28 +61,31 @@ contract CrowdfundingEther is ReentrancyGuard {
         return endTime - block.timestamp;
     }
 
-    function contribute()
-        external
-        payable
-        isValidPhase
-        hasNotReachedTarget
-        nonReentrant
-    {
-        if (getTotalContributions() >= fundTarget) {
-            revert("Funding target reached");
-        }
-
+    function contribute() external payable isValidPhase nonReentrant {
         require(msg.value > 0, "Invalid contribution amount");
 
-        uint256 remainingUntilTarget = fundTarget - getTotalContributions();
         uint256 userContribution = msg.value;
+
+        uint256 remainingUntilTarget = fundTarget.sub(
+            getTotalContributions() - userContribution
+        );
+
+        require(
+            remainingUntilTarget > 0,
+            "Target has been reached, wait for launch."
+        );
+
         uint256 differenceToBeRefunded;
 
         if (userContribution > remainingUntilTarget) {
-            differenceToBeRefunded = userContribution - remainingUntilTarget;
-            contributions[msg.sender] += remainingUntilTarget;
+            differenceToBeRefunded = userContribution.sub(remainingUntilTarget);
+            contributions[msg.sender] = contributions[msg.sender].add(
+                remainingUntilTarget
+            );
         } else {
-            contributions[msg.sender] += msg.value;
+            contributions[msg.sender] = contributions[msg.sender].add(
+                msg.value
+            );
         }
 
         emit Contribution(msg.sender, msg.value);
