@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.21;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./SafeMath.sol";
@@ -8,15 +8,21 @@ contract CrowdfundingEther is ReentrancyGuard {
     using SafeMath for uint256;
 
     address public owner;
-    uint256 public fundTarget = 0.05 ether;
-    uint256 public startTime = 1706139381;
-    uint256 public endTime = 1706139981;
+    uint256 public fundTarget = 1 ether;
+    uint256 public startTime = 1709060700;
+    uint256 public endTime = 1709061300;
+    bool public fundsWithdrawn;
 
     mapping(address => uint256) public contributions;
 
     event Contribution(address indexed contributor, uint256 amount);
     event RefundClaimed(address indexed contributor, uint256 amount);
     event Withdrawal(uint256 amount);
+
+    modifier fundsNotWithdrawn() {
+        require(!fundsWithdrawn, "Funds already withdrawn");
+        _;
+    }
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Not the contract owner");
@@ -117,7 +123,7 @@ contract CrowdfundingEther is ReentrancyGuard {
         contributions[msg.sender] = 0;
     }
 
-    function withdrawFunds() external onlyOwner nonReentrant {
+    function withdrawFunds() external onlyOwner nonReentrant fundsNotWithdrawn {
         require(
             block.timestamp > endTime && getTotalContributions() >= fundTarget,
             "Either it's not the end of funding, or the fund target hasn't been reached."
@@ -125,5 +131,6 @@ contract CrowdfundingEther is ReentrancyGuard {
 
         uint256 balance = getTotalContributions();
         require(payable(address(owner)).send(balance), "Something went wrong");
+        fundsWithdrawn = true;
     }
 }
